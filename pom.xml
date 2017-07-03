@@ -7,7 +7,7 @@
 
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.liferay.ide.osx.signing.server</groupId>
+  <groupId>com.liferay.osx.signing.server</groupId>
   <artifactId>osx-signing-server</artifactId>
   <name>OSX Signing Server</name>
   <version>1.0.0-SNAPSHOT</version>
