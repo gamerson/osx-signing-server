@@ -54,6 +54,11 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.liferay.osx.signing.server</groupId>
+			<artifactId>osx-signing-application</artifactId>
+			<version>1.0.0-SNAPSHOT</version>
+		</dependency>
+		<dependency>
 			<groupId>org.osgi</groupId>
 			<artifactId>osgi.enroute.junit.wrapper</artifactId>
 			<version>4.12.0</version>
@@ -62,6 +67,11 @@
 			<groupId>org.osgi</groupId>
 			<artifactId>osgi.enroute.hamcrest.wrapper</artifactId>
 			<version>1.3.0</version>
+		</dependency>
+		<dependency>
+			<groupId>biz.aQute.bnd</groupId>
+			<artifactId>biz.aQute.bndlib</artifactId>
+			<version>3.3.0</version>
 		</dependency>
 	</dependencies>
 </project>

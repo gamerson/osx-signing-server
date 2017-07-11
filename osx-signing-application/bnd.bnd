@@ -1,0 +1,3 @@
+Bundle-SymbolicName: com.liferay.osx.signing.application
+
+Eclipse-PlatformFilter: (osgi.os=macosx)
