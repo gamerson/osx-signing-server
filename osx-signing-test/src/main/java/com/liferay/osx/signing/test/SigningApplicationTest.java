@@ -1,13 +1,30 @@
+/**
+ * Copyright (c) 2000-present Liferay, Inc. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation; either version 2.1 of the License, or (at your option)
+ * any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+ * details.
+ */
+
 package com.liferay.osx.signing.test;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.stream.Stream;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -22,12 +39,10 @@ import org.osgi.util.tracker.ServiceTracker;
 
 import aQute.lib.io.IO;
 
+/**
+ * @author Gregory Amerson
+ */
 public class SigningApplicationTest {
-
-	private static final BundleContext bundleContext = FrameworkUtil.getBundle(SigningApplicationTest.class)
-			.getBundleContext();
-
-	private ServiceTracker<ClientBuilder, ClientBuilder> _clientBuilderTracker;
 
 	@After
 	public void after() {
@@ -36,24 +51,65 @@ public class SigningApplicationTest {
 
 	@Before
 	public void before() {
-		_clientBuilderTracker = new ServiceTracker<>(bundleContext, ClientBuilder.class, null);
+		_clientBuilderTracker = new ServiceTracker<>(
+			_bundleContext, ClientBuilder.class, null);
 
 		_clientBuilderTracker.open();
 	}
 
 	@Test
+	public void testCodesign() throws Exception {
+		String tmpAppDir = _extractTestApp(
+			"unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
+
+		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<>();
+
+		form.add(
+			"identity", "Developer ID Application: Liferay, Inc. (7H3SPU5TB9)");
+		form.add("path", tmpAppDir);
+
+		Client client = _createClient();
+
+		WebTarget target = client.target("http://localhost:8080");
+
+		target = target.path("/codesign");
+
+		Builder builder = target.request();
+
+		Response response = builder.post(Entity.form(form));
+
+		Assert.assertNotNull(response);
+
+		Assert.assertEquals(Status.OK.getStatusCode(), response.getStatus());
+
+		String postResponse = response.readEntity(String.class);
+
+		Stream<String> stream = Stream.of(postResponse.split("\n"));
+
+		Assert.assertTrue(
+			stream.anyMatch(
+				s -> s.contains("Developer ID Application: Liferay, Inc.")));
+	}
+
+	@Test
 	public void testCodesignBadIdentity() throws Exception {
-		Path tmpAppDir = _extractTestApp("unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
+		String tmpAppDir = _extractTestApp(
+			"unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
 
-		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<String,String>();
+		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<>();
+
 		form.add("identity", "foo");
-		form.add("path", tmpAppDir.toString());
+		form.add("path", tmpAppDir);
 
-		Response response = _createClient()
-			.target("http://localhost:8888")
-			.path("/codesign")
-			.request()
-			.post(Entity.form(form));
+		Client client = _createClient();
+
+		WebTarget target = client.target("http://localhost:8080");
+
+		target = target.path("/codesign");
+
+		Builder builder = target.request();
+
+		Response response = builder.post(Entity.form(form));
 
 		Assert.assertNotNull(response);
 
@@ -66,14 +122,19 @@ public class SigningApplicationTest {
 
 	@Test
 	public void testVerifySigned() throws Exception {
-		Path tmpAppDir = _extractTestApp("signed/LiferayWorkspace-1.5.0-osx-installer.app");
+		String tmpAppDir = _extractTestApp(
+			"signed/LiferayWorkspace-1.5.0-osx-installer.app");
 
-		Response response = _createClient()
-			.target("http://localhost:8888")
-			.path("/verify")
-			.queryParam("path", tmpAppDir.toAbsolutePath().toString())
-			.request()
-			.get(Response.class);
+		Client client = _createClient();
+
+		WebTarget target = client.target("http://localhost:8080");
+
+		target = target.path("/verify");
+		target = target.queryParam("path", tmpAppDir);
+
+		Builder builder = target.request();
+
+		Response response = builder.get(Response.class);
 
 		Assert.assertNotNull(response);
 
@@ -81,19 +142,28 @@ public class SigningApplicationTest {
 
 		String getResponse = response.readEntity(String.class);
 
-		Assert.assertTrue(Stream.of(getResponse.split("\n")).anyMatch(s -> s.contains("Developer ID Application: Liferay, Inc. (7H3SPU5TB9)")));
+		Stream<String> stream = Stream.of(getResponse.split("\n"));
+
+		Assert.assertTrue(
+			stream.anyMatch(
+				s -> s.contains("Developer ID Application: Liferay, Inc.")));
 	}
 
 	@Test
 	public void testVerifyUnSigned() throws Exception {
-		Path tmpAppDir = _extractTestApp("unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
+		String tmpAppDir = _extractTestApp(
+			"unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
 
-		Response response = _createClient()
-			.target("http://localhost:8888")
-			.path("/verify")
-			.queryParam("path", tmpAppDir.toAbsolutePath().toString())
-			.request()
-			.get(Response.class);
+		Client client = _createClient();
+
+		WebTarget target = client.target("http://localhost:8080");
+
+		target = target.path("/verify");
+		target = target.queryParam("path", tmpAppDir);
+
+		Builder builder = target.request();
+
+		Response response = builder.get(Response.class);
 
 		Assert.assertNotNull(response);
 
@@ -101,42 +171,9 @@ public class SigningApplicationTest {
 
 		String getResponse = response.readEntity(String.class);
 
-		Assert.assertTrue(getResponse, getResponse.contains("code object is not signed at all"));
-	}
-
-	@Test
-	public void testCodesign() throws Exception {
-		Path tmpAppDir = _extractTestApp("unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
-
-		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<String,String>();
-		form.add("identity", "Developer ID Application: Liferay, Inc. (7H3SPU5TB9)");
-		form.add("path", tmpAppDir.toString());
-
-		Response response = _createClient()
-			.target("http://localhost:8888")
-			.path("/codesign")
-			.request()
-			.post(Entity.form(form));
-
-		Assert.assertNotNull(response);
-
-		Assert.assertEquals(Status.OK.getStatusCode(), response.getStatus());
-
-		String postResponse = response.readEntity(String.class);
-
-		Assert.assertTrue(Stream.of(postResponse.split("\n")).anyMatch(s -> s.contains("Developer ID Application: Liferay, Inc. (7H3SPU5TB9)")));
-	}
-
-	private Path _extractTestApp(String path) throws Exception {
-		Path tmpDir = Files.createTempDirectory("temp-app-dir");
-
-		IO.copy(new File("src/test/resources"), tmpDir.toFile());
-
-		Path appPath = tmpDir.resolve(path);
-
-		Assert.assertTrue(appPath.toString(), appPath.toFile().exists());
-
-		return appPath;
+		Assert.assertTrue(
+			getResponse,
+			getResponse.contains("code object is not signed at all"));
 	}
 
 	private Client _createClient() {
@@ -146,8 +183,40 @@ public class SigningApplicationTest {
 			clientBuilder = _clientBuilderTracker.waitForService(5000);
 
 			return clientBuilder.build();
-		} catch (InterruptedException ie) {
+		}
+		catch (InterruptedException ie) {
 			throw new RuntimeException(ie);
 		}
 	}
+
+	private String _extractTestApp(String path) throws Exception {
+		Path tmpDir = Files.createTempDirectory("temp-app-dir");
+
+		Path srcPath = Paths.get("src/test/resources");
+
+		File srcDir = srcPath.toFile();
+
+		if (!srcDir.exists()) {
+			srcPath = Paths.get("../../../").resolve(srcPath);
+			srcDir = srcPath.toFile();
+		}
+
+		Assert.assertTrue(srcDir.getAbsolutePath(), srcDir.exists());
+
+		IO.copy(srcDir, tmpDir.toFile());
+
+		Path appPath = tmpDir.resolve(path);
+
+		appPath = appPath.toAbsolutePath();
+
+		Assert.assertTrue(appPath.toString(), appPath.toFile().exists());
+
+		return appPath.toString();
+	}
+
+	private static final BundleContext _bundleContext = FrameworkUtil.getBundle(
+		SigningApplicationTest.class).getBundleContext();
+
+	private ServiceTracker<ClientBuilder, ClientBuilder> _clientBuilderTracker;
+
 }

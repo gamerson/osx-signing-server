@@ -1,11 +1,11 @@
 Bundle-SymbolicName: com.liferay.osx.signing.test
 
-Conditional-Package: \
-	aQute.lib.*,\
-	aQute.libg.*
-
-Test-Cases: \
+Test-Cases:\
 	${classes;CONCRETE;EXTENDS;junit.framework.TestCase},\
 	${classes;CONCRETE;ANNOTATED;org.junit.Test}
+
+-conditionalpackage: 	aQute.lib.*,\
+	\
+	aQute.libg.*
 
 -contract: JavaJAXRS
