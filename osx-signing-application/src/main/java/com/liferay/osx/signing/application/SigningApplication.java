@@ -56,7 +56,8 @@ public class SigningApplication {
 	@Path("/codesign")
 	@POST
 	public String codesign(
-		@FormParam("identity")String identity, @FormParam("path")String path) {
+		@FormParam("identity")String identity, @FormParam("path")String path,
+		@FormParam("dmg")boolean dmg) {
 
 		_ensureBinariesAvailable();
 
@@ -75,6 +76,38 @@ public class SigningApplication {
 			_sign(dir, identity);
 
 			List<String> output = _verify(dir);
+
+			if (dmg) {
+				_createDmg(dir);
+			}
+
+			return _toString(output);
+		}
+		catch (Exception e) {
+			_log.error("Error signing application", e);
+
+			return "ERROR: " + e.getMessage();
+		}
+	}
+
+	@Path("/dmg")
+	@POST
+	public String dmg(@FormParam("path") String path) {
+		_ensureBinariesAvailable();
+
+		final File dir;
+
+		try {
+			dir = _getDir(path);
+		}
+		catch (Exception e) {
+			_log.error(e.getMessage(), e);
+
+			return "ERROR: " + e.getMessage();
+		}
+
+		try {
+			List<String> output = _createDmg(dir);
 
 			return _toString(output);
 		}
@@ -113,14 +146,50 @@ public class SigningApplication {
 		}
 	}
 
-	private void _ensureBinariesAvailable() {
-		if (!_findExecutable("codesign")) {
-			throw new RuntimeException("Could not find executable: codesign");
+	private List<String> _createDmg(File dir)
+		throws InterruptedException, IOException {
+
+		ProcessBuilder processBuilder = new ProcessBuilder();
+
+		String outputName = new File(
+			dir.getParentFile(), _getDmgName(dir)).getAbsolutePath();
+
+		processBuilder.command(
+			"hdiutil", "create", "-volname", _getVolname(dir), "-srcfolder",
+			dir.getAbsolutePath(), "-ov", "-format", "UDZO", outputName);
+
+		Process dmgProcess = processBuilder.start();
+
+		List<String> stdin = _readStreamFully(dmgProcess.getInputStream());
+
+		int exitCode = dmgProcess.waitFor();
+
+		if (exitCode > 0) {
+			List<String> stderr = _readStreamFully(dmgProcess.getErrorStream());
+
+			String message = "hdiutil returned error: " + _toString(stderr);
+
+			throw new RuntimeException(message);
 		}
 
-		if (!_findExecutable("security")) {
-			throw new RuntimeException("Could not find executable: security");
+		if (_log.isInfoEnabled()) {
+			_log.info("Successfully created dmg: " + dir);
+			_log.info(_toString(stdin));
 		}
+
+		return stdin;
+	}
+
+	private void _ensureBinariesAvailable() {
+		Stream<String> exes = Stream.of("codesign", "hdiutil", "security");
+
+		exes.forEach(
+			exe -> {
+				if (!_findExecutable(exe)) {
+					throw new RuntimeException(
+						"Could not find executable: codesign");
+				}
+			});
 	}
 
 	private boolean _findExecutable(String exec) {
@@ -144,6 +213,14 @@ public class SigningApplication {
 
 		throw new IllegalArgumentException(
 			path + " is not an existing directory.");
+	}
+
+	private String _getDmgName(File dir) {
+		return dir.getName().replaceAll("\\.app$", "\\.dmg");
+	}
+
+	private String _getVolname(File dir) {
+		return dir.getName().replaceAll("\\.app$", "");
 	}
 
 	private List<String> _readStreamFully(InputStream inputStream)
@@ -189,6 +266,13 @@ public class SigningApplication {
 			throw new RuntimeException(message);
 		}
 
+		if (_log.isInfoEnabled()) {
+			_log.info(
+				"Successfully signed app: " + dir + " with identity " +
+					identity);
+			_log.info(_toString(stderr));
+		}
+
 		return stderr;
 	}
 
@@ -212,6 +296,11 @@ public class SigningApplication {
 			String message = "codesign returned error\n: " + _toString(stderr);
 
 			throw new RuntimeException(message);
+		}
+
+		if (_log.isInfoEnabled()) {
+			_log.info("Verified app: " + dir);
+			_log.info(_toString(stderr));
 		}
 
 		return stderr;

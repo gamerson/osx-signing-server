@@ -14,10 +14,14 @@
 
 package com.liferay.osx.signing.test;
 
+import aQute.lib.io.IO;
+
 import java.io.File;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
 import java.util.stream.Stream;
 
 import javax.ws.rs.client.Client;
@@ -33,11 +37,10 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.util.tracker.ServiceTracker;
-
-import aQute.lib.io.IO;
 
 /**
  * @author Gregory Amerson
@@ -58,7 +61,36 @@ public class SigningApplicationTest {
 	}
 
 	@Test
-	public void testCodesign() throws Exception {
+	public void testCodesignBadIdentity() throws Exception {
+		String tmpAppDir = _extractTestApp(
+			"unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
+
+		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<>();
+
+		form.add("identity", "foo");
+		form.add("path", tmpAppDir);
+
+		Client client = _createClient();
+
+		WebTarget target = client.target("http://localhost:8080");
+
+		target = target.path("/codesign");
+
+		Builder builder = target.request();
+
+		Response response = builder.post(Entity.form(form));
+
+		Assert.assertNotNull(response);
+
+		Assert.assertEquals(Status.OK.getStatusCode(), response.getStatus());
+
+		String postResponse = response.readEntity(String.class);
+
+		Assert.assertEquals("ERROR: foo: no identity found", postResponse);
+	}
+
+	@Test
+	public void testCodesignNoDmg() throws Exception {
 		String tmpAppDir = _extractTestApp(
 			"unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
 
@@ -89,17 +121,30 @@ public class SigningApplicationTest {
 		Assert.assertTrue(
 			stream.anyMatch(
 				s -> s.contains("Developer ID Application: Liferay, Inc.")));
+
+		Path tmpAppPath = Paths.get(tmpAppDir);
+
+		Path codeSignaturePath = tmpAppPath.resolve("Contents/_CodeSignature");
+
+		Assert.assertTrue(codeSignaturePath.toFile().exists());
+
+		Path dmgPath = tmpAppPath.resolveSibling(
+			"LiferayWorkspace-1.5.0-osx-installer.dmg");
+
+		Assert.assertFalse(dmgPath.toFile().exists());
 	}
 
 	@Test
-	public void testCodesignBadIdentity() throws Exception {
+	public void testCodesignWithDmg() throws Exception {
 		String tmpAppDir = _extractTestApp(
 			"unsigned/LiferayWorkspace-1.5.0-osx-installer.app");
 
 		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<>();
 
-		form.add("identity", "foo");
+		form.add(
+			"identity", "Developer ID Application: Liferay, Inc. (7H3SPU5TB9)");
 		form.add("path", tmpAppDir);
+		form.add("dmg", "true");
 
 		Client client = _createClient();
 
@@ -117,7 +162,52 @@ public class SigningApplicationTest {
 
 		String postResponse = response.readEntity(String.class);
 
-		Assert.assertEquals("ERROR: foo: no identity found", postResponse);
+		Stream<String> stream = Stream.of(postResponse.split("\n"));
+
+		Assert.assertTrue(
+			stream.anyMatch(
+				s -> s.contains("Developer ID Application: Liferay, Inc.")));
+
+		Path tmpAppPath = Paths.get(tmpAppDir);
+
+		Path codeSignaturePath = tmpAppPath.resolve("Contents/_CodeSignature");
+
+		Assert.assertTrue(codeSignaturePath.toFile().exists());
+
+		Path dmgPath = tmpAppPath.resolveSibling(
+			"LiferayWorkspace-1.5.0-osx-installer.dmg");
+
+		Assert.assertTrue(dmgPath.toFile().exists());
+	}
+
+	@Test
+	public void testDmg() throws Exception {
+		String tmpAppDir = _extractTestApp(
+			"signed/LiferayWorkspace-1.5.0-osx-installer.app");
+
+		MultivaluedHashMap<String, String> form = new MultivaluedHashMap<>();
+
+		form.add("path", tmpAppDir);
+
+		Client client = _createClient();
+
+		WebTarget target = client.target("http://localhost:8080");
+
+		target = target.path("/dmg");
+
+		Builder builder = target.request();
+
+		Response response = builder.post(Entity.form(form));
+
+		Assert.assertNotNull(response);
+
+		Assert.assertEquals(Status.OK.getStatusCode(), response.getStatus());
+
+		String postResponse = response.readEntity(String.class);
+
+		Assert.assertEquals(
+			"created: " + tmpAppDir.replaceAll("\\.app$", "\\.dmg"),
+			postResponse);
 	}
 
 	@Test
@@ -198,6 +288,7 @@ public class SigningApplicationTest {
 
 		if (!srcDir.exists()) {
 			srcPath = Paths.get("../../../").resolve(srcPath);
+
 			srcDir = srcPath.toFile();
 		}
 
