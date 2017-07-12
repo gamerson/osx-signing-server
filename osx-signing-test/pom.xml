@@ -43,7 +43,7 @@
 				<artifactId>bnd-testing-maven-plugin</artifactId>
 				<configuration>
 					<failOnChanges>true</failOnChanges>
-					<resolve>true</resolve>
+					<resolve>false</resolve>
 					<bndruns>
 						<bndrun>test.bndrun</bndrun>
 					</bndruns>

@@ -171,8 +171,8 @@
 				<groupId>biz.aQute.bnd</groupId>
 				<artifactId>bnd-export-maven-plugin</artifactId>
 				<configuration>
-					<failOnChanges>true</failOnChanges>
-					<resolve>true</resolve>
+					<failOnChanges>false</failOnChanges>
+					<resolve>false</resolve>
 					<bndruns>
 						<bndrun>codesign_server.bndrun</bndrun>
 					</bndruns>
